@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <title>单机俄罗斯方块</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <style>
   :root{
     --bg:#0f1724;
@@ -12,64 +12,98 @@
     --muted:#94a3b8;
     --tile-board:#071029;
   }
-  html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#071526 0%,var(--bg) 100%);color:#e6eef8}
-  .wrap{display:flex;gap:20px;align-items:flex-start;justify-content:center;padding:28px}
-  .left{background:var(--panel);padding:18px;border-radius:12px;box-shadow:0 6px 24px rgba(2,6,23,0.6)}
-  canvas{background:var(--tile-board);display:block;border-radius:6px}
-  .right{width:230px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:16px;border-radius:8px}
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#071526 0%,var(--bg) 100%);color:#e6eef8;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  .wrap{
+    display:flex;
+    gap:20px;
+    align-items:flex-start;
+    justify-content:center;
+    padding:28px;
+    flex-wrap: wrap; /* allow wrap on small screens */
+  }
+  .left{
+    background:var(--panel);
+    padding:18px;
+    border-radius:12px;
+    box-shadow:0 6px 24px rgba(2,6,23,0.6);
+    /* constrain width so canvas can scale */
+    width: min(360px, 92vw);
+    box-sizing: border-box;
+  }
+  canvas{background:var(--tile-board);display:block;border-radius:6px; width:100%; height:auto;}
+  /* right panel (stats) */
+  .right{
+    width:230px;
+    background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);
+    padding:16px;
+    border-radius:8px;
+    box-sizing:border-box;
+  }
   .stat{font-size:14px;color:var(--muted);margin-bottom:12px}
   h1{font-size:18px;margin:0 0 8px;color:var(--accent)}
   .controls{font-size:13px;color:#cfe9ff;line-height:1.6}
-  .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.06);cursor:pointer;margin-top:10px}
+  .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.06);cursor:pointer;margin-top:10px;border:none;color:#e6eef8}
   .small{font-size:12px;color:var(--muted)}
   footer{margin-top:12px;font-size:12px;color:var(--muted)}
   .key{background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;margin:0 4px}
 
-/* touch controls */
+/* touch controls - prominent and centered at bottom */
 #touch-controls{
   position: fixed;
-  right: 12px;
   bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  gap: 8px;
-  z-index: 50;
+  gap: 12px;
+  z-index: 9999;
   align-items: center;
   pointer-events: auto;
   user-select: none;
 }
 .tc-btn{
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  background: rgba(255,255,255,0.06);
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.65);
   color: #e6eef8;
-  border: none;
-  font-size: 18px;
+  border: 2px solid rgba(125,211,252,0.25);
+  font-size: 22px;
   display:flex;
   align-items:center;
   justify-content:center;
-  box-shadow: 0 4px 12px rgba(2,6,23,0.5);
+  box-shadow: 0 6px 18px rgba(2,6,23,0.6);
   -webkit-tap-highlight-color: transparent;
 }
-.tc-btn.long { width: 58px; height:58px; font-weight:600; }
+.tc-btn.long { width: 72px; height:72px; font-weight:600; }
 @media (max-width: 520px){
-  #touch-controls{
-    left: 50%;
-    transform: translateX(-50%);
-    right: auto;
-    gap: 10px;
-  }
-  .tc-btn{ width:44px; height:44px; font-size:16px; }
+  .tc-btn{ width:54px; height:54px; font-size:20px; }
+  .tc-btn.long { width:64px; height:64px; }
+  .right{display:none;} /* hide right panel on small screens */
+  .left{padding:12px;}
+  .wrap{padding:16px;}
 }
-body.has-touch-controls .wrap { padding-bottom: 88px; }
+body.has-touch-controls .wrap { padding-bottom: 110px; } /* give room for buttons */
+
+/* small nicety: center everything on very small screens */
+@media (max-width: 360px){
+  .left{width: 96vw;}
+}
+
+/* game canvas container adjustments */
+.left canvas[aria-label="Tetris board"]{
+  display:block;
+  width:100%;
+  height:auto;
+  border-radius:6px;
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="left">
+  <div class="left" role="main" aria-label="Tetris game area">
     <canvas id="board" width="300" height="600" aria-label="Tetris board"></canvas>
   </div>
-  <div class="right">
+  <div class="right" aria-hidden="false">
     <h1>单机俄罗斯方块</h1>
     <div class="stat">分数: <span id="score">0</span></div>
     <div class="stat">等级: <span id="level">1</span></div>
@@ -79,14 +113,14 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
     <div class="controls">
       控制: <span class="key">←</span> 左移 &nbsp; <span class="key">→</span> 右移 &nbsp; <span class="key">↓</span> 加速下落<br/>
       <span class="key">↑</span> 旋转 &nbsp; <span class="key">空格</span> 瞬降<br/>
-      <div><button id="startBtn" class="btn">开始 / 重新开始</button></div>
-      <div class="small">在移动设备上也可用屏幕按键或手势操作</div>
+      <div><button id="startBtn" class="btn" aria-label="开始/重新开始">开始 / 重新开始</button></div>
+      <div class="small">本地保存：localStorage（刷新页面可恢复）</div>
     </div>
-    <footer>实现：简洁 Canvas + 原生 JS</footer>
+    <footer>实现：Canvas + 原生 JS · 触屏友好</footer>
   </div>
 </div>
 
-<!-- 手机触控面板 -->
+<!-- 手机触控面板（居中底部） -->
 <div id="touch-controls" aria-hidden="false">
   <button id="btn-left" class="tc-btn" aria-label="左移">◀</button>
   <button id="btn-rotate" class="tc-btn" aria-label="旋转">⟳</button>
@@ -99,15 +133,17 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
 /* ----- TETRIS 简单实现 (单文件) ----- */
 (() => {
   const COLS = 10, ROWS = 20;
-  const BLOCK = 30; // 单块像素大小
+  const BLOCK = 30; // internal pixel size
+  // canvas elements
   const boardCanvas = document.getElementById('board');
   const ctx = boardCanvas.getContext('2d');
+  // keep internal rendering resolution (we let CSS scale the canvas visually)
   boardCanvas.width = COLS * BLOCK;
   boardCanvas.height = ROWS * BLOCK;
   const nextCanvas = document.getElementById('next');
   const nctx = nextCanvas.getContext('2d');
 
-  // 7 种方块，使用矩阵表示
+  // shapes and colors
   const SHAPES = {
     I: [[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
         [[0,0,1,0],[0,0,1,0],[0,0,1,0],[0,0,1,0]]],
@@ -144,7 +180,6 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
       this.rotations = SHAPES[type];
       this.rotationIndex = 0;
       this.matrix = this.rotations[this.rotationIndex];
-      // 初始位置
       this.x = Math.floor((COLS - this.matrix[0].length)/2);
       this.y = -this.matrix.length;
     }
@@ -162,7 +197,6 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
     }
   }
 
-  // 随机生成七种块（bag 随机化简单实现）
   function createBag(){
     const types = Object.keys(SHAPES);
     const bag = types.slice();
@@ -173,7 +207,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
     return bag;
   }
 
-  // 游戏状态
+  // state
   let board = makeEmptyBoard();
   let bag = createBag();
   let current = new Piece(bag.pop());
@@ -231,7 +265,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
         board.splice(r,1);
         board.unshift(Array(COLS).fill(0));
         cleared++;
-        r++; // re-check this index (as rows have shifted)
+        r++;
       }
     }
     if (cleared>0){
@@ -257,7 +291,6 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
     spawnNext();
     if (collide(board,current)){
       running = false;
-      // game over
     }
     saveState();
   }
@@ -276,7 +309,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
 
   function rotate(dir=1){
     current.rotate(dir);
-    // 简单的 wall-kick: try shifts
+    // simple wall-kick: try shifts
     const kicks = [0, -1, 1, -2, 2];
     let kicked = false;
     for (let k of kicks){
@@ -304,20 +337,18 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
     ctx.fillStyle = type ? COLORS[type] : 'transparent';
     if (type){
       ctx.fillRect(x*size+1, y*size+1, size-2, size-2);
-      // highlight
       ctx.fillStyle = 'rgba(255,255,255,0.06)';
       ctx.fillRect(x*size+1, y*size+1, size-2, 3);
     } else {
-      // draw faint grid
       ctx.strokeStyle = 'rgba(255,255,255,0.02)';
       ctx.strokeRect(x*size+0.5, y*size+0.5, size-1, size-1);
     }
   }
 
   function draw(){
-    // board
+    // clear
     ctx.clearRect(0,0,boardCanvas.width,boardCanvas.height);
-    // draw existing
+    // draw board
     for (let r=0;r<ROWS;r++){
       for (let c=0;c<COLS;c++){
         drawCell(ctx,c,r,BLOCK, board[r][c]);
@@ -335,7 +366,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
       }
     }
 
-    // next piece canvas
+    // next piece
     nctx.clearRect(0,0,nextCanvas.width,nextCanvas.height);
     const size = 24;
     const offsetX = 12, offsetY = 12;
@@ -349,15 +380,14 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
       }
     }
 
-    // update UI numbers
     document.getElementById('score').textContent = score;
     document.getElementById('level').textContent = level;
     document.getElementById('lines').textContent = lines;
   }
 
-  // input
+  // keyboard input
   document.addEventListener('keydown', (e) => {
-    if (!running && e.keyCode !== keys.SPACE && e.keyCode !== keys.UP && e.keyCode !== keys.DOWN && e.keyCode !== keys.LEFT && e.keyCode !== keys.RIGHT) return;
+    if (!running && ![keys.SPACE, keys.UP, keys.DOWN, keys.LEFT, keys.RIGHT].includes(e.keyCode)) return;
     if (e.keyCode === keys.LEFT) { move(-1); draw(); }
     else if (e.keyCode === keys.RIGHT) { move(1); draw(); }
     else if (e.keyCode === keys.DOWN) { current.y++; if (collide(board,current)){ current.y--; lockPiece(); } draw(); }
@@ -370,7 +400,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
     resetGame();
   });
 
-  // localStorage save/load
+  // localStorage
   function saveState(){
     try{
       const state = {board,bag,current:{type:current.type,rotationIndex:current.rotationIndex,x:current.x,y:current.y},next:{type:nextPiece.type,rotationIndex:nextPiece.rotationIndex},score,lines,level,dropInterval};
@@ -383,7 +413,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
       if (!s) return;
       const st = JSON.parse(s);
       board = st.board || makeEmptyBoard();
-      bag = createBag(); // keep simple
+      bag = createBag();
       current = new Piece(st.current.type);
       current.rotationIndex = st.current.rotationIndex || 0;
       current.matrix = current.rotations[current.rotationIndex];
@@ -401,7 +431,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
     step(delta);
     draw();
     if (!running){
-      // draw game over overlay
+      // overlay
       ctx.fillStyle = 'rgba(2,6,23,0.7)';
       ctx.fillRect(0, boardCanvas.height/2 - 40, boardCanvas.width, 80);
       ctx.fillStyle = '#fff';
@@ -417,7 +447,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
   if (!running) resetGame();
   update();
 
-  /* === 手机触摸控制 & 滑动支持 === */
+  /* === 手机触摸控制 & 手势 === */
   (function enableTouchControls(){
     document.body.classList.add('has-touch-controls');
 
@@ -428,12 +458,13 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
     const btnHdrop = document.getElementById('btn-hdrop');
     const boardEl = document.getElementById('board');
 
+    // touch buttons
     btnLeft.addEventListener('touchstart', e => { e.preventDefault(); move(-1); draw(); });
     btnRight.addEventListener('touchstart', e => { e.preventDefault(); move(1); draw(); });
     btnRotate.addEventListener('touchstart', e => { e.preventDefault(); rotate(1); draw(); });
     btnHdrop.addEventListener('touchstart', e => { e.preventDefault(); hardDrop(); draw(); });
 
-    // 连按/长按下落（软下落）
+    // soft drop long-press
     let softDropTimer = null;
     btnDrop.addEventListener('touchstart', e => {
       e.preventDefault();
@@ -465,7 +496,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
       });
     });
 
-    // 简单滑动手势识别（横向移动 = 左/右；向下 = 软下落；轻触 = 旋转）
+    // simple gestures on the game canvas
     let touchStartX = 0, touchStartY = 0, touchStartTime = 0, moved = false;
     const SWIPE_THRESHOLD = 18; // px
     const TAP_MAX_TIME = 250; // ms
@@ -511,7 +542,7 @@ body.has-touch-controls .wrap { padding-bottom: 88px; }
       moved = false;
     });
 
-    // 防止触控引起页面拖动（可选）
+    // prevent page scroll when interacting with game or controls
     document.body.addEventListener('touchmove', function(e){
       const tgt = e.target;
       if (tgt === boardEl || (tgt.closest && tgt.closest('#touch-controls'))) {
