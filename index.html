@@ -24,12 +24,50 @@
   .small{font-size:12px;color:var(--muted)}
   footer{margin-top:12px;font-size:12px;color:var(--muted)}
   .key{background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;margin:0 4px}
+
+/* touch controls */
+#touch-controls{
+  position: fixed;
+  right: 12px;
+  bottom: 18px;
+  display: flex;
+  gap: 8px;
+  z-index: 50;
+  align-items: center;
+  pointer-events: auto;
+  user-select: none;
+}
+.tc-btn{
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  color: #e6eef8;
+  border: none;
+  font-size: 18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow: 0 4px 12px rgba(2,6,23,0.5);
+  -webkit-tap-highlight-color: transparent;
+}
+.tc-btn.long { width: 58px; height:58px; font-weight:600; }
+@media (max-width: 520px){
+  #touch-controls{
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    gap: 10px;
+  }
+  .tc-btn{ width:44px; height:44px; font-size:16px; }
+}
+body.has-touch-controls .wrap { padding-bottom: 88px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="left">
-    <canvas id="board" width="300" height="600"></canvas>
+    <canvas id="board" width="300" height="600" aria-label="Tetris board"></canvas>
   </div>
   <div class="right">
     <h1>单机俄罗斯方块</h1>
@@ -42,10 +80,19 @@
       控制: <span class="key">←</span> 左移 &nbsp; <span class="key">→</span> 右移 &nbsp; <span class="key">↓</span> 加速下落<br/>
       <span class="key">↑</span> 旋转 &nbsp; <span class="key">空格</span> 瞬降<br/>
       <div><button id="startBtn" class="btn">开始 / 重新开始</button></div>
-      <div class="small">保存自动在本地（localStorage）</div>
+      <div class="small">在移动设备上也可用屏幕按键或手势操作</div>
     </div>
     <footer>实现：简洁 Canvas + 原生 JS</footer>
   </div>
+</div>
+
+<!-- 手机触控面板 -->
+<div id="touch-controls" aria-hidden="false">
+  <button id="btn-left" class="tc-btn" aria-label="左移">◀</button>
+  <button id="btn-rotate" class="tc-btn" aria-label="旋转">⟳</button>
+  <button id="btn-right" class="tc-btn" aria-label="右移">▶</button>
+  <button id="btn-drop" class="tc-btn long" aria-label="软下落">▼</button>
+  <button id="btn-hdrop" class="tc-btn" aria-label="瞬降">⤓</button>
 </div>
 
 <script>
@@ -369,6 +416,110 @@
   loadState();
   if (!running) resetGame();
   update();
+
+  /* === 手机触摸控制 & 滑动支持 === */
+  (function enableTouchControls(){
+    document.body.classList.add('has-touch-controls');
+
+    const btnLeft = document.getElementById('btn-left');
+    const btnRight = document.getElementById('btn-right');
+    const btnRotate = document.getElementById('btn-rotate');
+    const btnDrop = document.getElementById('btn-drop');
+    const btnHdrop = document.getElementById('btn-hdrop');
+    const boardEl = document.getElementById('board');
+
+    btnLeft.addEventListener('touchstart', e => { e.preventDefault(); move(-1); draw(); });
+    btnRight.addEventListener('touchstart', e => { e.preventDefault(); move(1); draw(); });
+    btnRotate.addEventListener('touchstart', e => { e.preventDefault(); rotate(1); draw(); });
+    btnHdrop.addEventListener('touchstart', e => { e.preventDefault(); hardDrop(); draw(); });
+
+    // 连按/长按下落（软下落）
+    let softDropTimer = null;
+    btnDrop.addEventListener('touchstart', e => {
+      e.preventDefault();
+      current.y++;
+      if (collide(board,current)){ current.y--; lockPiece(); }
+      draw();
+      softDropTimer = setInterval(()=> {
+        current.y++;
+        if (collide(board,current)){ current.y--; lockPiece(); }
+        draw();
+      }, 120);
+    });
+    const stopSoft = (e) => { e && e.preventDefault(); if (softDropTimer) clearInterval(softDropTimer); softDropTimer = null; };
+    btnDrop.addEventListener('touchend', stopSoft);
+    btnDrop.addEventListener('touchcancel', stopSoft);
+
+    [btnLeft, btnRight, btnRotate, btnHdrop, btnDrop].forEach(b => {
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (b === btnLeft) { move(-1); }
+        else if (b === btnRight) { move(1); }
+        else if (b === btnRotate) { rotate(1); }
+        else if (b === btnHdrop) { hardDrop(); }
+        else if (b === btnDrop) {
+          current.y++;
+          if (collide(board,current)){ current.y--; lockPiece(); }
+        }
+        draw();
+      });
+    });
+
+    // 简单滑动手势识别（横向移动 = 左/右；向下 = 软下落；轻触 = 旋转）
+    let touchStartX = 0, touchStartY = 0, touchStartTime = 0, moved = false;
+    const SWIPE_THRESHOLD = 18; // px
+    const TAP_MAX_TIME = 250; // ms
+    boardEl.addEventListener('touchstart', function(e){
+      if (e.touches.length > 1) return;
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchStartTime = Date.now();
+      moved = false;
+    }, {passive:true});
+
+    boardEl.addEventListener('touchmove', function(e){
+      if (e.touches.length > 1) return;
+      const t = e.touches[0];
+      const dx = t.clientX - touchStartX;
+      const dy = t.clientY - touchStartY;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD){
+        moved = true;
+        if (dx > 0) { move(1); } else { move(-1); }
+        touchStartX = t.clientX;
+        touchStartY = t.clientY;
+        draw();
+      } else if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_THRESHOLD){
+        moved = true;
+        if (dy > 0) {
+          current.y++;
+          if (collide(board,current)){ current.y--; lockPiece(); }
+          draw();
+        }
+        touchStartX = t.clientX;
+        touchStartY = t.clientY;
+      }
+    }, {passive:true});
+
+    boardEl.addEventListener('touchend', function(e){
+      const dt = Date.now() - touchStartTime;
+      if (!moved && dt < TAP_MAX_TIME) {
+        rotate(1);
+        draw();
+      }
+      touchStartX = touchStartY = touchStartTime = 0;
+      moved = false;
+    });
+
+    // 防止触控引起页面拖动（可选）
+    document.body.addEventListener('touchmove', function(e){
+      const tgt = e.target;
+      if (tgt === boardEl || (tgt.closest && tgt.closest('#touch-controls'))) {
+        e.preventDefault();
+      }
+    }, {passive:false});
+  })();
+
 })();
 </script>
 </body>
