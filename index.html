@@ -2,16 +2,31 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<title>俄罗斯方块</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<style>
-body{margin:0;background:#0f1724;color:#fff;font-family:Arial;text-align:center}
-canvas{background:#071029;display:block;margin:10px auto;border-radius:8px}
+<title>俄罗斯方块</title>
 
-/* 覆盖层（开始/暂停/结束） */
+<style>
+body{
+  margin:0;
+  background:#0f1724;
+  color:#fff;
+  font-family:Arial;
+  text-align:center;
+}
+
+canvas{
+  background:#071029;
+  display:block;
+  margin:10px auto;
+  border-radius:8px;
+  width:90vw;
+  max-width:300px;
+}
+
+/* 覆盖层 */
 .overlay{
   position:fixed;
-  top:0;left:0;right:0;bottom:0;
+  inset:0;
   background:rgba(0,0,0,0.7);
   display:flex;
   align-items:center;
@@ -23,32 +38,54 @@ canvas{background:#071029;display:block;margin:10px auto;border-radius:8px}
 
 button{
   padding:10px 20px;
-  margin-top:10px;
+  margin:6px;
   font-size:16px;
   border:none;
   border-radius:6px;
   background:#7dd3fc;
 }
+
+/* 🎮 触控按钮 */
+.controls{
+  position:fixed;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:10px;
+  z-index:200;
+}
+
+.ctrl-btn{
+  width:60px;
+  height:60px;
+  font-size:20px;
+  border-radius:10px;
+  background:rgba(0,0,0,0.6);
+  border:2px solid #7dd3fc;
+  color:white;
+}
 </style>
 </head>
+
 <body>
 
 <h2>俄罗斯方块</h2>
 <canvas id="board" width="300" height="600"></canvas>
 
-<!-- 开始界面 -->
+<!-- 开始 -->
 <div id="startScreen" class="overlay">
   <h1>开始游戏</h1>
   <button onclick="startGame()">开始</button>
 </div>
 
-<!-- 暂停界面 -->
+<!-- 暂停 -->
 <div id="pauseScreen" class="overlay hidden">
   <h1>已暂停</h1>
   <button onclick="resumeGame()">继续</button>
 </div>
 
-<!-- 结束界面 -->
+<!-- 结束 -->
 <div id="gameOverScreen" class="overlay hidden">
   <h1>游戏结束</h1>
   <button onclick="startGame()">重新开始</button>
@@ -56,15 +93,33 @@ button{
 
 <button onclick="togglePause()">暂停</button>
 
+<!-- 🎮 手机控制 -->
+<div class="controls">
+  <button class="ctrl-btn" onclick="move(-1)">◀</button>
+  <button class="ctrl-btn" onclick="rotate()">⟳</button>
+  <button class="ctrl-btn" onclick="move(1)">▶</button>
+  <button class="ctrl-btn" onclick="drop()">▼</button>
+</div>
+
 <script>
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
 
-const COLS = 10, ROWS = 20, SIZE = 30;
-
+const COLS=10, ROWS=20, SIZE=30;
 let board, current, running=false, paused=false;
 
-const shapes = [
+/* 音效 */
+function playSound(freq,time){
+  const ac=new AudioContext();
+  const o=ac.createOscillator();
+  o.frequency.value=freq;
+  o.connect(ac.destination);
+  o.start();
+  setTimeout(()=>o.stop(),time);
+}
+
+/* 方块 */
+const shapes=[
 [[1,1,1,1]],
 [[1,1],[1,1]],
 [[0,1,0],[1,1,1]],
@@ -75,19 +130,16 @@ const shapes = [
 ];
 
 function newPiece(){
-  return {
-    shape: shapes[Math.floor(Math.random()*shapes.length)],
-    x:3,y:0
-  }
+  return {shape:shapes[Math.floor(Math.random()*7)],x:3,y:0}
 }
 
 function reset(){
-  board = Array.from({length:ROWS},()=>Array(COLS).fill(0));
-  current = newPiece();
+  board=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  current=newPiece();
 }
 
 function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0,0,300,600);
   for(let y=0;y<ROWS;y++){
     for(let x=0;x<COLS;x++){
       if(board[y][x]){
@@ -96,45 +148,48 @@ function draw(){
       }
     }
   }
-  current.shape.forEach((row,y)=>{
-    row.forEach((v,x)=>{
-      if(v){
-        ctx.fillStyle="#f0f";
-        ctx.fillRect((current.x+x)*SIZE,(current.y+y)*SIZE,SIZE-2,SIZE-2);
-      }
-    })
-  })
+  current.shape.forEach((r,y)=>r.forEach((v,x)=>{
+    if(v){
+      ctx.fillStyle="#f0f";
+      ctx.fillRect((current.x+x)*SIZE,(current.y+y)*SIZE,SIZE-2,SIZE-2);
+    }
+  }));
 }
 
 function collide(){
-  return current.shape.some((row,y)=>
-    row.some((v,x)=>{
-      let nx=current.x+x, ny=current.y+y;
-      return v && (nx<0||nx>=COLS||ny>=ROWS||board[ny][nx]);
-    })
-  )
+  return current.shape.some((r,y)=>r.some((v,x)=>{
+    let nx=current.x+x, ny=current.y+y;
+    return v&&(nx<0||nx>=COLS||ny>=ROWS||board[ny][nx]);
+  }));
 }
 
 function merge(){
-  current.shape.forEach((row,y)=>{
-    row.forEach((v,x)=>{
-      if(v) board[current.y+y][current.x+x]=1;
-    })
-  })
+  current.shape.forEach((r,y)=>r.forEach((v,x)=>{
+    if(v) board[current.y+y][current.x+x]=1;
+  }));
 }
 
 function clearLines(){
-  let count=0;
-  board=board.filter(row=>{
-    if(row.every(v=>v)){
-      count++;
-      return false;
-    }
+  let cleared=0;
+  board=board.filter(r=>{
+    if(r.every(v=>v)){cleared++;return false;}
     return true;
-  })
+  });
   while(board.length<ROWS) board.unshift(Array(COLS).fill(0));
+  if(cleared) playSound(600,100);
+}
 
-  if(count>0) playSound(600,100);
+function move(dir){
+  current.x+=dir;
+  if(collide()) current.x-=dir;
+  draw();
+}
+
+function rotate(){
+  const s=current.shape;
+  current.shape=s[0].map((_,i)=>s.map(r=>r[i]).reverse());
+  if(collide()) current.shape=s;
+  draw();
 }
 
 function drop(){
@@ -151,16 +206,15 @@ function drop(){
       document.getElementById("gameOverScreen").classList.remove("hidden");
     }
   }
+  draw();
 }
 
 function loop(){
-  if(running&&!paused){
-    drop();
-    draw();
-  }
+  if(running&&!paused) drop();
   setTimeout(loop,500);
 }
 
+/* 状态控制 */
 function startGame(){
   reset();
   running=true;
@@ -180,31 +234,14 @@ function resumeGame(){
   document.getElementById("pauseScreen").classList.add("hidden");
 }
 
-/* 音效 */
-function playSound(freq,time){
-  const ctx = new AudioContext();
-  const osc = ctx.createOscillator();
-  osc.frequency.value=freq;
-  osc.connect(ctx.destination);
-  osc.start();
-  setTimeout(()=>osc.stop(),time);
-}
-
-/* 控制 */
+/* 键盘 */
 document.addEventListener("keydown",e=>{
   if(!running) return;
-  if(e.key==="ArrowLeft") current.x--;
-  if(e.key==="ArrowRight") current.x++;
+  if(e.key==="ArrowLeft") move(-1);
+  if(e.key==="ArrowRight") move(1);
   if(e.key==="ArrowDown") drop();
-  if(e.key==="ArrowUp"){
-    current.shape=current.shape[0].map((_,i)=>current.shape.map(r=>r[i]).reverse());
-  }
-  if(collide()){
-    if(e.key==="ArrowLeft") current.x++;
-    if(e.key==="ArrowRight") current.x--;
-  }
-  draw();
-})
+  if(e.key==="ArrowUp") rotate();
+});
 
 loop();
 </script>
